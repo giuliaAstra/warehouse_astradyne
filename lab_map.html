@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Astradyne — Lab</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f5;color:#1a1a2e;min-height:100vh}
+.header{background:#0f1f3d;color:#fff;padding:11px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.header h1{font-size:14px;font-weight:600}
+.mode-btns{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.mbtn{padding:5px 14px;border-radius:7px;border:none;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.15s}
+.mbtn.active{background:#fff;color:#0f1f3d}
+.mbtn:not(.active){background:rgba(255,255,255,0.13);color:#fff}
+.mbtn:hover:not(.active){background:rgba(255,255,255,0.22)}
+.color-row{display:flex;gap:5px;margin-left:8px}
+.zcolor{width:22px;height:22px;border-radius:4px;border:2px solid transparent;cursor:pointer;transition:all 0.1s}
+.zcolor.active{border-color:#fff;transform:scale(1.2)}
+.hint{font-size:11px;opacity:0.5;margin-left:6px}
+
+.map-wrap{background:#fff;margin:12px;border-radius:12px;border:1px solid #e0e0e0;padding:12px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px;align-items:center}
+.leg{display:flex;align-items:center;gap:5px;font-size:11px;color:#666}
+.ldot{width:10px;height:10px;border-radius:2px;display:inline-block}
+#mainsvg{width:100%;border-radius:6px;display:block}
+
+/* Side panel */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.18);z-index:99;display:none}
+.overlay.show{display:block}
+.side-panel{position:fixed;top:0;right:-420px;width:400px;height:100vh;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,0.13);z-index:100;transition:right 0.28s ease;display:flex;flex-direction:column}
+.side-panel.open{right:0}
+.sp-head{color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.sp-head h2{font-size:15px;font-weight:600}
+.sp-close{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;opacity:0.8;line-height:1}
+.sp-close:hover{opacity:1}
+.sp-body{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+
+.sec-title{font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:7px;display:flex;align-items:center;justify-content:space-between}
+.edit-btn{padding:3px 10px;background:#f0f2f5;border:1px solid #e0e0e0;border-radius:5px;font-size:11px;cursor:pointer;color:#555;font-weight:600}
+.edit-btn:hover{background:#e4e6f0}
+
+.area-name-disp{font-size:15px;font-weight:700;color:#0f1f3d;padding:8px 12px;background:#f0f2f5;border-radius:8px;min-height:38px}
+.resp-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#f8f9fc;border-radius:8px}
+.resp-av{width:34px;height:34px;border-radius:50%;background:#0f1f3d;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}
+.resp-name{font-size:13px;font-weight:600}
+.rules-box{background:#fffde7;border:1px solid #f9e79f;border-radius:8px;padding:12px;font-size:13px;color:#555;line-height:1.65;white-space:pre-wrap;min-height:52px}
+.empty-hint{color:#bbb;font-style:italic;font-size:12px}
+.item-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#f8f9fc;border-radius:8px;border:1px solid #eee;margin-bottom:5px}
+.item-name{flex:1;font-size:13px;font-weight:500}
+.qty-btn{width:26px;height:26px;border-radius:5px;border:1px solid #e0e0e0;background:#fff;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#555}
+.qty-btn:hover{background:#f0f2f5}
+.qty-num{font-size:13px;font-weight:600;min-width:26px;text-align:center}
+.item-del{background:none;border:none;cursor:pointer;color:#ccc;font-size:17px;padding:0 2px;line-height:1}
+.item-del:hover{color:#e74c3c}
+.add-row{display:flex;gap:6px;margin-top:6px}
+.add-inp{flex:1;padding:7px 10px;border:1px solid #e0e0e0;border-radius:7px;font-size:13px;outline:none}
+.add-inp:focus{border-color:#0f1f3d}
+.add-qty{width:58px;padding:7px 8px;border:1px solid #e0e0e0;border-radius:7px;font-size:13px;outline:none}
+.field-inp{width:100%;padding:8px 10px;border:1px solid #e0e0e0;border-radius:7px;font-size:13px;outline:none;margin-bottom:6px}
+.field-inp:focus{border-color:#0f1f3d}
+.field-ta{width:100%;padding:9px 10px;border:1px solid #e0e0e0;border-radius:7px;font-size:13px;outline:none;resize:vertical;min-height:90px;line-height:1.6}
+.field-ta:focus{border-color:#0f1f3d}
+.btn-row{display:flex;gap:6px;margin-top:4px}
+.save-btn{padding:7px 16px;background:#0f1f3d;color:#fff;border:none;border-radius:7px;font-size:12px;cursor:pointer;font-weight:600}
+.save-btn:hover{background:#1a2f5a}
+.cancel-btn{padding:7px 14px;background:#f0f2f5;color:#555;border:none;border-radius:7px;font-size:12px;cursor:pointer}
+.del-btn{width:100%;padding:8px;background:#fff;color:#e74c3c;border:1px solid #e74c3c;border-radius:7px;font-size:12px;cursor:pointer;font-weight:600;margin-top:4px}
+.del-btn:hover{background:#fff0f0}
+.dims-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.dim-lbl{font-size:11px;color:#999;margin-bottom:3px}
+
+/* ── NEW LAYOUT ── */
+.main-layout{display:grid;grid-template-columns:1fr 260px;gap:0;height:calc(100vh - 52px)}
+.map-area{background:#fff;overflow:auto;padding:12px}
+.list-panel{background:#fff;border-left:1px solid #e0e0e0;display:flex;flex-direction:column;overflow:hidden}
+.lp-head{padding:12px 14px;border-bottom:1px solid #f0f0f0;flex-shrink:0}
+.lp-title{font-size:12px;font-weight:700;color:#444;margin-bottom:8px}
+.lp-filter{display:flex;flex-direction:column;gap:6px}
+.lp-select{width:100%;padding:5px 8px;border:1px solid #e0e0e0;border-radius:6px;font-size:11px;outline:none;background:#fff}
+.lp-search{width:100%;padding:5px 8px;border:1px solid #e0e0e0;border-radius:6px;font-size:11px;outline:none}
+.lp-search:focus,.lp-select:focus{border-color:#0f1f3d}
+.lp-list{flex:1;overflow-y:auto;padding:8px}
+.lp-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;border:1px solid #f0f0f0;margin-bottom:5px;cursor:pointer;transition:all 0.12s;background:#fafafa}
+.lp-item:hover{background:#f0f2f5;border-color:#ddd}
+.lp-item.active{background:#e8edf8;border-color:#b0bde8}
+.lp-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.lp-name{font-size:12px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lp-sub{font-size:10px;color:#aaa;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lp-badge{font-size:10px;font-weight:700;color:#fff;background:#0f1f3d;border-radius:10px;padding:1px 6px;flex-shrink:0}
+.lp-empty{font-size:12px;color:#bbb;font-style:italic;padding:12px 8px;text-align:center}
+/* view tabs */
+.view-tabs{display:flex;gap:4px;padding:0 14px 10px}
+.vtab{flex:1;padding:5px;border-radius:6px;border:1px solid #e0e0e0;background:#fff;cursor:pointer;font-size:11px;font-weight:600;color:#888;text-align:center;transition:all 0.12s}
+.vtab.active{background:#0f1f3d;color:#fff;border-color:#0f1f3d}
+/* header compact */
+.header{padding:8px 16px}
+.header h1{font-size:13px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📦 Astradyne s.r.l. — Lab · Via Nickmann 10, Bari</h1>
+  <div style="display:flex;align-items:center;gap:6px;font-size:11px;opacity:0.7"><div id="sync-dot" style="width:8px;height:8px;border-radius:50%;background:#f39c12"></div><span>sync</span></div>
+  <div class="mode-btns">
+    <button class="mbtn active" id="btn-view" onclick="setMode('view')">👁 View</button>
+    <button class="mbtn" id="btn-draw" onclick="setMode('draw')">🎨 Draw zone</button>
+    <button class="mbtn" id="btn-edit" onclick="setMode('edit')">✏️ Edit</button>
+    <div class="color-row" id="color-row" style="display:none">
+      <div class="zcolor active" style="background:rgba(52,152,219,0.4)" data-fill="rgba(52,152,219,0.18)" data-stroke="rgba(41,128,185,0.8)" onclick="selectColor(this)"></div>
+      <div class="zcolor" style="background:rgba(46,204,113,0.4)" data-fill="rgba(46,204,113,0.18)" data-stroke="rgba(39,174,96,0.8)" onclick="selectColor(this)"></div>
+      <div class="zcolor" style="background:rgba(231,76,60,0.4)" data-fill="rgba(231,76,60,0.18)" data-stroke="rgba(192,57,43,0.8)" onclick="selectColor(this)"></div>
+      <div class="zcolor" style="background:rgba(243,156,18,0.4)" data-fill="rgba(243,156,18,0.18)" data-stroke="rgba(211,84,0,0.8)" onclick="selectColor(this)"></div>
+      <div class="zcolor" style="background:rgba(155,89,182,0.4)" data-fill="rgba(155,89,182,0.18)" data-stroke="rgba(125,60,152,0.8)" onclick="selectColor(this)"></div>
+      <div class="zcolor" style="background:rgba(26,188,156,0.4)" data-fill="rgba(26,188,156,0.18)" data-stroke="rgba(22,160,133,0.8)" onclick="selectColor(this)"></div>
+      <div class="zcolor" style="background:rgba(241,196,15,0.5)" data-fill="rgba(241,196,15,0.2)" data-stroke="rgba(243,156,18,0.9)" onclick="selectColor(this)"></div>
+      <div class="zcolor" style="background:rgba(127,140,141,0.4)" data-fill="rgba(127,140,141,0.18)" data-stroke="rgba(100,110,110,0.7)" onclick="selectColor(this)"></div>
+    </div>
+    <button class="mbtn" id="btn-add" onclick="toggleAddPanel()" style="background:rgba(39,174,96,0.8);color:#fff">+ Add element</button>
+    <span class="hint" id="mode-hint">click element or zone to manage</span>
+  </div>
+</div>
+
+<div class="main-layout">
+<div class="map-area">
+  <div class="legend" style="margin-bottom:8px">
+    <span class="leg"><span class="ldot" style="background:#f4a460"></span>Machinery</span>
+    <span class="leg"><span class="ldot" style="background:#87ceeb"></span>Tables</span>
+    <span class="leg"><span class="ldot" style="background:#dda0dd"></span>Shelves</span>
+    <span class="leg"><span class="ldot" style="background:#90ee90"></span>Clean room</span>
+    <span class="leg"><span class="ldot" style="background:rgba(52,152,219,0.35);border:1px solid rgba(41,128,185,0.5)"></span>Zones</span>
+    <span style="font-size:11px;color:#aaa;margin-left:4px">· 🟡 rules · click to manage</span>
+  </div>
+  <svg id="mainsvg" viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
+        <path d="M36 0 L0 0 0 36" fill="none" stroke="#f5f5f5" stroke-width="0.5"/>
+      </pattern>
+    </defs>
+    <rect x="0" y="0" width="900" height="520" fill="url(#grid)"/>
+    <rect x="50" y="47" width="784" height="425" fill="#fafaf8" stroke="#444" stroke-width="3" rx="3"/>
+    <rect x="50" y="414" width="108" height="58" fill="#e8e8e8" stroke="#999" stroke-width="1.5" rx="2"/>
+    <text x="104" y="447" text-anchor="middle" font-size="11" fill="#888">Bathroom</text>
+    <rect x="768" y="47" width="66" height="130" fill="#f0ede8" stroke="#ccc" stroke-width="1" stroke-dasharray="5,3" rx="2"/>
+    <text x="801" y="115" text-anchor="middle" font-size="9" fill="#bbb" transform="rotate(-90,801,115)">niche</text>
+    <line x1="50" y1="34" x2="834" y2="34" stroke="#ddd" stroke-width="0.8"/>
+    <text x="442" y="30" text-anchor="middle" font-size="9" fill="#bbb">21.77 m</text>
+    <line x1="34" y1="47" x2="34" y2="472" stroke="#ddd" stroke-width="0.8"/>
+    <text x="28" y="264" text-anchor="middle" font-size="9" fill="#bbb" transform="rotate(-90,28,264)">11.80 m</text>
+    <g id="zones-layer"></g>
+    <rect id="draw-preview" x="0" y="0" width="0" height="0" fill="rgba(52,152,219,0.15)" stroke="rgba(41,128,185,0.8)" stroke-width="1.5" stroke-dasharray="6,3" display="none" pointer-events="none"/>
+    <line id="sg-h" stroke="#e74c3c" stroke-width="1" stroke-dasharray="4,3" opacity="0" pointer-events="none" x1="0" y1="0" x2="900" y2="0"/>
+    <line id="sg-v" stroke="#e74c3c" stroke-width="1" stroke-dasharray="4,3" opacity="0" pointer-events="none" x1="0" y1="0" x2="0" y2="520"/>
+    <g id="elems-layer"></g>
+  </svg>
+</div><!-- end map-area -->
+
+<!-- LIST PANEL -->
+<div class="list-panel" id="list-panel">
+  <div class="lp-head">
+    <div class="lp-title" id="lp-title" style="font-size:12px;font-weight:700;color:#444;margin-bottom:8px">Elements</div>
+    <div class="view-tabs" style="display:flex;gap:4px;margin-bottom:10px">
+      <button class="vtab active" id="vtab-elements" onclick="setView('elements')">🪑 Elements</button>
+      <button class="vtab" id="vtab-areas" onclick="setView('areas')">🗂 Areas</button>
+    </div>
+    <div class="lp-filter" style="display:flex;flex-direction:column;gap:5px">
+      <input class="lp-search" id="lp-search" placeholder="Search..." oninput="renderListPanel()">
+      <select class="lp-select" id="lp-filter" onchange="renderListPanel()">
+        <option value="">All</option>
+      </select>
+    </div>
+  </div>
+  <div class="lp-list" id="lp-list"></div>
+</div>
+
+</div><!-- end main-layout -->
+
+<div class="overlay" id="overlay" onclick="closePanel()"></div>
+<div class="side-panel" id="side-panel">
+  <div class="sp-head" id="sp-head">
+    <h2 id="sp-title">—</h2>
+    <button class="sp-close" onclick="closePanel()">×</button>
+  </div>
+  <div class="sp-body" id="sp-body"></div>
+</div>
+
+<script>
+// ── CONSTANTS ──
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const OX=50, OY=47, WF=784, HF=425, SNAP=36;
+
+// ── ELEMENTS DATA ──
+const ELEMENTS = [
+  {id:'1',label:'①',name:'Ecoflam',color:'#f4a460',stroke:'#c0622a',x:190,y:57,w:414,h:108},
+  {id:'2',label:'②',name:'Table ②',color:'#87ceeb',stroke:'#2471a3',x:694,y:195,w:49,h:119},
+  {id:'3',label:'③',name:'Shelf ③',color:'#dda0dd',stroke:'#7d3c98',x:500,y:192,w:86,h:22},
+  {id:'4',label:'④',name:'Table ④',color:'#87ceeb',stroke:'#2471a3',x:315,y:205,w:65,h:50},
+  {id:'5',label:'⑤',name:'Cabinet ⑤',color:'#dda0dd',stroke:'#7d3c98',x:125,y:47,w:63,h:16},
+  {id:'6',label:'⑥',name:'Shelf ⑥',color:'#dda0dd',stroke:'#7d3c98',x:125,y:67,w:22,h:77},
+  {id:'7',label:'⑦',name:'Table ⑦',color:'#87ceeb',stroke:'#2471a3',x:195,y:210,w:65,h:22},
+  {id:'8',label:'⑧',name:'Bench ⑧',color:'#87ceeb',stroke:'#2471a3',x:195,y:240,w:32,h:72},
+  {id:'9',label:'⑨',name:'Roll holder ⑨',color:'#dda0dd',stroke:'#7d3c98',x:195,y:320,w:86,h:18},
+  {id:'10',label:'⑩',name:'Bench ⑩',color:'#87ceeb',stroke:'#2471a3',x:148,y:430,w:86,h:22},
+  {id:'11',label:'⑪',name:'Table ⑪',color:'#87ceeb',stroke:'#2471a3',x:148,y:340,w:36,h:83},
+  {id:'12',label:'⑫',name:'Vacuum Press ⑫',color:'#f4a460',stroke:'#c0622a',x:325,y:330,w:40,h:68},
+  {id:'13',label:'⑬',name:'Fridge ⑬',color:'#f4a460',stroke:'#c0622a',x:380,y:355,w:29,h:25},
+  {id:'14',label:'⑭',name:'Bench ⑭',color:'#87ceeb',stroke:'#2471a3',x:420,y:345,w:50,h:33},
+  {id:'15',label:'⑮',name:'Clean room ⑮',color:'#90ee90',stroke:'#1e8449',x:540,y:300,w:137,h:115},
+  {id:'16',label:'⑯',name:'Bench ⑯',color:'#87ceeb',stroke:'#2471a3',x:525,y:370,w:13,h:50},
+  {id:'17a',label:'⑰',name:'Cabinet ⑰a',color:'#dda0dd',stroke:'#7d3c98',x:780,y:255,w:16,h:43},
+  {id:'17b',label:'⑰',name:'Cabinet ⑰b',color:'#dda0dd',stroke:'#7d3c98',x:780,y:304,w:16,h:50},
+  {id:'18',label:'⑱',name:'Table ⑱',color:'#87ceeb',stroke:'#2471a3',x:756,y:165,w:22,h:65},
+  {id:'19',label:'⑲',name:'Table ⑲',color:'#87ceeb',stroke:'#2471a3',x:756,y:360,w:25,h:80},
+  {id:'20',label:'⑳',name:'Motor ⑳',color:'#f4a460',stroke:'#c0622a',x:57,y:57,w:36,h:50},
+  {id:'21',label:'㉑',name:'Elec. panel',color:'#f4a460',stroke:'#c0622a',x:57,y:115,w:18,h:11},
+  {id:'22',label:'㉒',name:'Table ㉒',color:'#87ceeb',stroke:'#2471a3',x:97,y:57,w:36,h:54},
+];
+
+// ── FIREBASE ──
+const firebaseConfig = {
+  apiKey: "AIzaSyBGjBhr0MTTPlaFCvduXY9vNgdF9mg2Yjw",
+  authDomain: "astradyne-lab.firebaseapp.com",
+  projectId: "astradyne-lab",
+  storageBucket: "astradyne-lab.firebasestorage.app",
+  messagingSenderId: "995216004352",
+  appId: "1:995216004352:web:93a68fc975c5761abd8fe5"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+function setSyncStatus(ok){
+  const dot=document.getElementById('sync-dot');
+  if(dot){dot.style.background=ok?'#27ae60':'#e74c3c';dot.title=ok?'Synced':'Sync error';}
+}
+
+// ── STORAGE (Firebase + localStorage fallback) ──
+function ls(key){try{return JSON.parse(localStorage.getItem(key)||'null');}catch(e){return null;}}
+function lsSet(key,val){localStorage.setItem(key,JSON.stringify(val));}
+
+let _zones=null,_zdata={},_epos=null,_edata={};
+
+function getZones(){return _zones||ls('wh_zones')||[];}
+function setZones(z){
+  _zones=z;lsSet('wh_zones',z);
+  db.collection('config').doc('zones').set({data:JSON.stringify(z)})
+    .then(()=>setSyncStatus(true)).catch(()=>setSyncStatus(false));
+}
+function getZoneData(id){return _zdata[id]||ls('wh_zdata_'+id)||{areaName:'',resp:'',rules:'',items:[]};}
+function setZoneData(id,d){
+  _zdata[id]=d;lsSet('wh_zdata_'+id,d);
+  db.collection('zonedata').doc(id).set(d)
+    .then(()=>setSyncStatus(true)).catch(()=>setSyncStatus(false));
+}
+function getElemPos(){return _epos||ls('wh_epos')||{};}
+function setElemPos(p){
+  _epos=p;lsSet('wh_epos',p);
+  db.collection('config').doc('elempos').set({data:JSON.stringify(p)})
+    .then(()=>setSyncStatus(true)).catch(()=>setSyncStatus(false));
+}
+function getElemData(id){return _edata[id]||ls('wh_edata_'+id)||{name:'',rules:'',items:[]};}
+function setElemData(id,d){
+  _edata[id]=d;lsSet('wh_edata_'+id,d);
+  db.collection('elemdata').doc(id).set(d)
+    .then(()=>setSyncStatus(true)).catch(()=>setSyncStatus(false));
+}
+
+async function loadFromFirebase(){
+  try{
+    const [zonesDoc,eposDoc,zdataDocs,edataDocs,customDoc,deletedDoc]=await Promise.all([
+      db.collection('config').doc('zones').get(),
+      db.collection('config').doc('elempos').get(),
+      db.collection('zonedata').get(),
+      db.collection('elemdata').get(),
+      db.collection('config').doc('customelems').get(),
+      db.collection('config').doc('deletedelems').get(),
+    ]);
+    if(zonesDoc.exists){_zones=JSON.parse(zonesDoc.data().data);lsSet('wh_zones',_zones);}
+    if(eposDoc.exists){_epos=JSON.parse(eposDoc.data().data);lsSet('wh_epos',_epos);}
+    zdataDocs.forEach(doc=>{_zdata[doc.id]=doc.data();lsSet('wh_zdata_'+doc.id,doc.data());});
+    edataDocs.forEach(doc=>{_edata[doc.id]=doc.data();lsSet('wh_edata_'+doc.id,doc.data());});
+    if(customDoc.exists){const c=JSON.parse(customDoc.data().data);lsSet('wh_custom_elems',c);}
+    if(deletedDoc.exists){const d=JSON.parse(deletedDoc.data().data);lsSet('wh_deleted_elems',d);}
+    setSyncStatus(true);
+  }catch(e){
+    console.warn('Firebase load failed, using localStorage:',e);
+    setSyncStatus(false);
+  }
+}
+
+function startRealtimeSync(){
+  db.collection('zonedata').onSnapshot(snap=>{
+    snap.docChanges().forEach(c=>{_zdata[c.doc.id]=c.doc.data();});
+    renderZones();renderListPanel();
+  });
+  db.collection('elemdata').onSnapshot(snap=>{
+    snap.docChanges().forEach(c=>{_edata[c.doc.id]=c.doc.data();});
+    renderElements();
+  });
+  db.collection('config').onSnapshot(snap=>{
+    snap.docChanges().forEach(c=>{
+      if(c.doc.id==='zones'){_zones=JSON.parse(c.doc.data().data);renderZones();renderListPanel();}
+      if(c.doc.id==='elempos'){_epos=JSON.parse(c.doc.data().data);renderElements();}
+      if(c.doc.id==='customelems')lsSet('wh_custom_elems',JSON.parse(c.doc.data().data));
+      if(c.doc.id==='deletedelems')lsSet('wh_deleted_elems',JSON.parse(c.doc.data().data));
+    });
+  });
+}
+
+// ── STATE ──
+let mode = 'view';
+let zones = [];
+let elemPos = {};
+let zoneFill = 'rgba(52,152,219,0.18)';
+let zoneStroke = 'rgba(41,128,185,0.8)';
+let drawing = false, drawStart = null;
+let draggingElem = null, dragOffX = 0, dragOffY = 0;
+let currentZoneId = null, currentElemId = null;
+let selectedElemId = null;
+
+// ── HELPERS ──
+function darken(c){return{'#f4a460':'#7a3800','#87ceeb':'#154360','#dda0dd':'#4a0080','#90ee90':'#145214'}[c]||'#333';}
+function snapV(v){return Math.round(v/SNAP)*SNAP;}
+function getSVGPt(cx,cy){
+  const svg=document.getElementById('mainsvg');
+  const pt=svg.createSVGPoint();pt.x=cx;pt.y=cy;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+function applyEPos(e){
+  const p=elemPos[e.id];
+  return p?{...e,...p}:e;
+}
+function getElemName(e){
+  const d=getElemData(e.id);
+  return d.name||e.name;
+}
+
+// ── MODE ──
+function setMode(m){
+  mode=m;
+  ['view','draw','edit'].forEach(x=>{
+    document.getElementById('btn-'+x).className='mbtn'+(m===x?' active':'');
+  });
+  document.getElementById('color-row').style.display=m==='draw'?'flex':'none';
+  const hints={view:'click element or zone to manage',draw:'choose color then drag to draw a zone',edit:'drag elements to move · click to rename/resize'};
+  document.getElementById('mode-hint').textContent=hints[m];
+  if(m==='draw'||m==='view'){
+    selectedElemId=null;
+    closePanel();
+  }
+  renderElements();
+}
+
+function selectColor(btn){
+  document.querySelectorAll('.zcolor').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  zoneFill=btn.getAttribute('data-fill');
+  zoneStroke=btn.getAttribute('data-stroke');
+  document.getElementById('draw-preview').setAttribute('fill',zoneFill);
+  document.getElementById('draw-preview').setAttribute('stroke',zoneStroke);
+}
+
+// ── DRAW ZONE ──
+const svg = document.getElementById('mainsvg');
+svg.addEventListener('mousedown', ev=>{
+  if(mode!=='draw')return;
+  ev.preventDefault();
+  const pt=getSVGPt(ev.clientX,ev.clientY);
+  drawStart={x:Math.max(OX,Math.min(OX+WF,pt.x)),y:Math.max(OY,Math.min(OY+HF,pt.y))};
+  drawing=true;
+  const pr=document.getElementById('draw-preview');
+  pr.setAttribute('fill',zoneFill);pr.setAttribute('stroke',zoneStroke);
+  pr.setAttribute('x',drawStart.x);pr.setAttribute('y',drawStart.y);
+  pr.setAttribute('width','0');pr.setAttribute('height','0');
+  pr.setAttribute('display','block');
+});
+
+document.addEventListener('mousemove', ev=>{
+  if(drawing&&drawStart){
+    const pt=getSVGPt(ev.clientX,ev.clientY);
+    const ex=Math.max(OX,Math.min(OX+WF,pt.x));
+    const ey=Math.max(OY,Math.min(OY+HF,pt.y));
+    const pr=document.getElementById('draw-preview');
+    pr.setAttribute('x',Math.min(drawStart.x,ex));
+    pr.setAttribute('y',Math.min(drawStart.y,ey));
+    pr.setAttribute('width',Math.abs(ex-drawStart.x));
+    pr.setAttribute('height',Math.abs(ey-drawStart.y));
+  }
+  if(draggingElem&&mode==='edit'){
+    const e=ELEMENTS.find(el=>el.id===draggingElem);
+    if(!e)return;
+    const ae=applyEPos(e);
+    const pt=getSVGPt(ev.clientX,ev.clientY);
+    let nx=Math.max(OX,Math.min(OX+WF-ae.w,pt.x-dragOffX));
+    let ny=Math.max(OY,Math.min(OY+HF-ae.h,pt.y-dragOffY));
+    // no snap on drag for precision
+    if(!elemPos[draggingElem])elemPos[draggingElem]={};
+    elemPos[draggingElem].x=nx; elemPos[draggingElem].y=ny;
+    const g=document.getElementById('eg-'+draggingElem);
+    if(g){
+      const r=g.querySelector('rect');
+      if(r){r.setAttribute('x',nx);r.setAttribute('y',ny);}
+      const big=ae.w>50&&ae.h>28, fs=Math.min(13,Math.max(7,Math.min(ae.w,ae.h)*0.38));
+      g.querySelectorAll('text').forEach((t,i)=>{
+        t.setAttribute('x',nx+ae.w/2);
+        t.setAttribute('y',i===0?(big?ny+ae.h/2-3:ny+ae.h/2+fs*0.4):ny+ae.h/2+11);
+      });
+      g.querySelectorAll('circle').forEach(c=>{
+        c.setAttribute('cx',nx+6);c.setAttribute('cy',ny+6);
+      });
+    }
+    document.getElementById('sg-h').setAttribute('y1',ny);document.getElementById('sg-h').setAttribute('y2',ny);document.getElementById('sg-h').setAttribute('opacity','0.5');
+    document.getElementById('sg-v').setAttribute('x1',nx);document.getElementById('sg-v').setAttribute('x2',nx);document.getElementById('sg-v').setAttribute('opacity','0.5');
+  }
+});
+
+document.addEventListener('mouseup', ev=>{
+  if(drawing&&drawStart){
+    const pt=getSVGPt(ev.clientX,ev.clientY);
+    const ex=Math.max(OX,Math.min(OX+WF,pt.x));
+    const ey=Math.max(OY,Math.min(OY+HF,pt.y));
+    document.getElementById('draw-preview').setAttribute('display','none');
+    drawing=false;
+    const w=Math.abs(ex-drawStart.x), h=Math.abs(ey-drawStart.y);
+    drawStart=null;
+    if(w<12||h<12)return;
+    const z={id:'z'+Date.now(),x:Math.min(drawStart?drawStart.x:ex,ex),y:Math.min(drawStart?drawStart.y:ey,ey),w,h,fill:zoneFill,stroke:zoneStroke};
+    // recalculate with correct start
+    const allZones=getZones();
+    const pr=document.getElementById('draw-preview');
+    const zx=parseFloat(pr.getAttribute('x')||OX);
+    const zy=parseFloat(pr.getAttribute('y')||OY);
+    const zw=parseFloat(pr.getAttribute('width')||0);
+    const zh=parseFloat(pr.getAttribute('height')||0);
+    if(zw<12||zh<12)return;
+    const newZ={id:'z'+Date.now(),x:zx,y:zy,w:zw,h:zh,fill:zoneFill,stroke:zoneStroke};
+    allZones.push(newZ);setZones(allZones);zones=allZones;
+    renderZones();
+    openZonePanel(newZ.id);
+  }
+  if(draggingElem){
+    setElemPos(elemPos);
+    document.getElementById('sg-h').setAttribute('opacity','0');
+    document.getElementById('sg-v').setAttribute('opacity','0');
+    const g=document.getElementById('eg-'+draggingElem);
+    if(g)g.style.cursor='grab';
+    draggingElem=null;
+  }
+});
+
+// ── RENDER ZONES ──
+function renderZones(){
+  zones=getZones();
+  const layer=document.getElementById('zones-layer');
+  layer.innerHTML='';
+  zones.forEach(z=>{
+    const d=getZoneData(z.id);
+    const itemCount=(d.items||[]).length;
+    const g=document.createElementNS(SVG_NS,'g');
+    g.setAttribute('id','zg-'+z.id);
+    g.style.cursor='pointer';
+
+    // In 'elements' view: show zones as outlines only, no text
+    // In 'areas' view: show zones with name, responsible, items badge
+    const isElementsView=currentView==='elements';
+    const isHighlighted=highlightedIds.size===0||highlightedIds.has(z.id);
+    const rect=document.createElementNS(SVG_NS,'rect');
+    rect.setAttribute('x',z.x);rect.setAttribute('y',z.y);
+    rect.setAttribute('width',z.w);rect.setAttribute('height',z.h);
+    rect.setAttribute('rx','5');
+    rect.setAttribute('fill',isElementsView?'none':z.fill);
+    rect.setAttribute('stroke',currentZoneId===z.id?'#0f1f3d':z.stroke);
+    rect.setAttribute('stroke-width',currentZoneId===z.id?'3.5':(isHighlighted&&!isElementsView?'2.5':(isElementsView?'1.5':'2')));
+    rect.setAttribute('stroke-dasharray',isElementsView?'6,3':'none');
+    const baseOpacity=isElementsView?0.5:1;
+    rect.setAttribute('opacity',isHighlighted?baseOpacity:(baseOpacity*0.2));
+    g.appendChild(rect);
+
+    if(!isElementsView){
+      if(d.areaName){
+        const t=document.createElementNS(SVG_NS,'text');
+        t.setAttribute('x',z.x+8);t.setAttribute('y',z.y+16);
+        t.setAttribute('font-size','11');t.setAttribute('font-weight','700');
+        t.setAttribute('fill',z.stroke);t.setAttribute('pointer-events','none');
+        t.setAttribute('opacity',isHighlighted?'1':'0.2');
+        // Clip name to fit within zone width (approx 6.5px per char at font-size 11)
+        const maxChars=Math.max(4,Math.floor((z.w-16)/6.5));
+        const nm=d.areaName.length>maxChars?d.areaName.substring(0,maxChars-1)+'…':d.areaName;
+        t.textContent=nm;g.appendChild(t);
+      }
+      if(d.resp&&z.h>30){
+        const maxCharsR=Math.max(4,Math.floor((z.w-20)/5.5));
+        const rn=d.resp.length>maxCharsR?d.resp.substring(0,maxCharsR-1)+'…':d.resp;
+        const t2=document.createElementNS(SVG_NS,'text');
+        t2.setAttribute('x',z.x+8);t2.setAttribute('y',z.y+(d.areaName?30:16));
+        t2.setAttribute('font-size','9');t2.setAttribute('fill',z.stroke);
+        t2.setAttribute('opacity',isHighlighted?'0.8':'0.15');t2.setAttribute('pointer-events','none');
+        t2.textContent='👤 '+rn;g.appendChild(t2);
+      }
+      if(itemCount>0){
+        const bc=document.createElementNS(SVG_NS,'circle');
+        bc.setAttribute('cx',z.x+z.w-10);bc.setAttribute('cy',z.y+10);bc.setAttribute('r','9');
+        bc.setAttribute('fill',z.stroke);bc.setAttribute('pointer-events','none');g.appendChild(bc);
+        const bt=document.createElementNS(SVG_NS,'text');
+        bt.setAttribute('x',z.x+z.w-10);bt.setAttribute('y',z.y+14);
+        bt.setAttribute('text-anchor','middle');bt.setAttribute('font-size','9');
+        bt.setAttribute('font-weight','700');bt.setAttribute('fill','#fff');
+        bt.setAttribute('pointer-events','none');bt.textContent=itemCount;g.appendChild(bt);
+      }
+    }
+
+    g.addEventListener('click', ev=>{
+      if(mode==='view'){ev.stopPropagation();openZonePanel(z.id);}
+    });
+    layer.appendChild(g);
+  });
+}
+
+// ── RENDER ELEMENTS ──
+function renderElements(){
+  elemPos=getElemPos();
+  const layer=document.getElementById('elems-layer');
+  layer.innerHTML='';
+  ELEMENTS.forEach(e=>{
+    const ae=applyEPos(e);
+    const ed=getElemData(e.id);
+    const displayName=ed.name||e.name;
+    const g=document.createElementNS(SVG_NS,'g');
+    g.setAttribute('id','eg-'+e.id);
+
+    const isSelected=selectedElemId===e.id&&mode==='edit';
+    const isAreasView=currentView==='areas'&&mode==='view';
+    const isElemHighlighted=highlightedIds.size===0||highlightedIds.has(e.id);
+    const rect=document.createElementNS(SVG_NS,'rect');
+    rect.setAttribute('x',ae.x);rect.setAttribute('y',ae.y);
+    rect.setAttribute('width',ae.w);rect.setAttribute('height',ae.h);
+    rect.setAttribute('rx','3');
+    rect.setAttribute('fill',isAreasView?'#ccc':ae.color);
+    rect.setAttribute('stroke',isSelected?'#0f1f3d':(isAreasView?'#aaa':(isElemHighlighted&&highlightedIds.size>0?'#0f1f3d':ae.stroke)));
+    rect.setAttribute('stroke-width',isSelected?'3':(isElemHighlighted&&highlightedIds.size>0&&!isAreasView?'2.5':'1'));
+    const baseOp=isAreasView?0.35:0.9;
+    rect.setAttribute('opacity',isElemHighlighted?baseOp:baseOp*0.2);
+    g.appendChild(rect);
+
+    // Rules dot (yellow) in view mode
+    if(ed.rules&&mode==='view'){
+      const dot=document.createElementNS(SVG_NS,'circle');
+      dot.setAttribute('cx',ae.x+6);dot.setAttribute('cy',ae.y+6);dot.setAttribute('r','5');
+      dot.setAttribute('fill','#f39c12');dot.setAttribute('pointer-events','none');
+      g.appendChild(dot);
+    }
+
+    // Label — single line only (hidden in areas view)
+    const cx=ae.x+ae.w/2, cy=ae.y+ae.h/2;
+    if(ae.w>14&&ae.h>10&&!isAreasView){
+      const fs=Math.min(12,Math.max(7,Math.min(ae.w,ae.h)*0.32));
+      const t=document.createElementNS(SVG_NS,'text');
+      t.setAttribute('x',cx);t.setAttribute('y',cy);
+      t.setAttribute('text-anchor','middle');t.setAttribute('dominant-baseline','middle');
+      t.setAttribute('font-size',fs);t.setAttribute('font-weight','700');
+      t.setAttribute('fill',darken(ae.color));t.setAttribute('pointer-events','none');
+      const maxChars=Math.max(3,Math.floor(ae.w/(fs*0.6)));
+      const name=displayName.trim();
+      t.textContent=name.length>maxChars?name.substring(0,maxChars-1)+'…':name;
+      g.appendChild(t);
+    }
+
+    // Events
+    if(mode==='view'&&currentView==='elements'){
+      g.style.cursor='pointer';
+      g.addEventListener('click', ev=>{ev.stopPropagation();openElemPanel(e.id);});
+    } else if(mode==='view'&&currentView==='areas'){
+      g.style.cursor='default';
+      // not clickable in areas view
+    } else if(mode==='edit'){
+      g.style.cursor='grab';
+      g.addEventListener('mousedown', ev=>{
+        ev.preventDefault();ev.stopPropagation();
+        selectedElemId=e.id;
+        draggingElem=e.id;
+        const pt=getSVGPt(ev.clientX,ev.clientY);
+        dragOffX=pt.x-ae.x; dragOffY=pt.y-ae.y;
+        g.style.cursor='grabbing';
+        openEditElemPanel(e.id);
+      });
+    }
+
+    layer.appendChild(g);
+  });
+}
+
+// ── CLOSE PANEL ──
+function highlightSingle(id, type){
+  highlightedIds=new Set([id]);
+  renderElements();renderZones();
+}
+
+function clearHighlight(){
+  highlightedIds=new Set();
+  renderElements();renderZones();
+}
+
+function closePanel(){
+  document.getElementById('side-panel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+  currentZoneId=null;currentElemId=null;
+  if(mode!=='edit')selectedElemId=null;
+  // Only clear highlight if no filter active
+  const search=document.getElementById('lp-search').value||'';
+  const filter=document.getElementById('lp-filter').value||'';
+  if(!search&&!filter)clearHighlight();
+  renderZones();
+  renderListPanel();
+}
+
+// ── ZONE PANEL ──
+function openZonePanel(id){
+  currentZoneId=id;currentElemId=null;
+  highlightedIds=new Set([id]);
+  const z=zones.find(z=>z.id===id);if(!z)return;
+  const d=getZoneData(id);
+  document.getElementById('sp-head').style.background=z.stroke||'#0f1f3d';
+  document.getElementById('sp-title').textContent=d.areaName||'Zone';
+  document.getElementById('sp-body').innerHTML=buildZoneBody(id,d);
+  document.getElementById('side-panel').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+  renderZones();
+  renderListPanel();
+}
+
+function getElemsInZone(zoneId){
+  const z=zones.find(z=>z.id===zoneId);if(!z)return[];
+  return ELEMENTS.filter(e=>{
+    const ae=applyEPos(e);
+    const ed=getElemData(e.id);
+    const name=ed.name||e.name;
+    // Check if element center is inside zone bounds
+    const cx=ae.x+ae.w/2, cy=ae.y+ae.h/2;
+    return cx>=z.x&&cx<=z.x+z.w&&cy>=z.y&&cy<=z.y+z.h;
+  }).map(e=>{const ed=getElemData(e.id);return{id:e.id,name:ed.name||e.name,color:applyEPos(e).color,stroke:applyEPos(e).stroke};});
+}
+
+function buildZoneBody(id,d){
+  const itemsHtml=(d.items||[]).map((item,i)=>`
+    <div class="item-row">
+      <span class="item-name">${item.name}</span>
+      <div style="display:flex;align-items:center;gap:4px">
+        <button class="qty-btn" onclick="changeQty('${id}',${i},-1)">−</button>
+        <span class="qty-num">${item.qty}</span>
+        <button class="qty-btn" onclick="changeQty('${id}',${i},+1)">+</button>
+      </div>
+      <button class="item-del" onclick="removeItem('${id}',${i})">×</button>
+    </div>`).join('');
+
+  // Elements inside this zone
+  const elemsInZone=getElemsInZone(id);
+  const elemsHtml=elemsInZone.length
+    ? elemsInZone.map(e=>`<span style="display:inline-flex;align-items:center;gap:4px;background:#f0f2f5;border:1px solid #e0e0e0;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:500;margin:2px"><span style="width:8px;height:8px;border-radius:2px;background:${e.color};border:1px solid ${e.stroke};display:inline-block;flex-shrink:0"></span>${e.name}</span>`).join('')
+    : '<span class="empty-hint">No elements detected in this area</span>';
+
+  return `
+    <div>
+      <div class="sec-title"><span>🏷 Area name</span><button class="edit-btn" onclick="toggleZoneEdit('areaName','${id}')">Edit</button></div>
+      <div id="z-areaName-disp" class="area-name-disp">${d.areaName||'<span class="empty-hint">Click Edit to set a name</span>'}</div>
+      <div id="z-areaName-edit" style="display:none;margin-top:8px">
+        <input class="field-inp" id="z-areaName-inp" value="${d.areaName||''}" placeholder="e.g. Production Zone, Storage A...">
+        <div class="btn-row"><button class="save-btn" onclick="saveZoneField('areaName','${id}')">Save</button><button class="cancel-btn" onclick="toggleZoneEdit('areaName','${id}')">Cancel</button></div>
+      </div>
+    </div>
+    <div>
+      <div class="sec-title"><span>👤 Responsible</span><button class="edit-btn" onclick="toggleZoneEdit('resp','${id}')">Edit</button></div>
+      <div id="z-resp-disp" class="resp-row">
+        <div class="resp-av">${d.resp?d.resp.charAt(0).toUpperCase():'?'}</div>
+        <div class="resp-name">${d.resp||'Not assigned'}</div>
+      </div>
+      <div id="z-resp-edit" style="display:none;margin-top:8px">
+        <input class="field-inp" id="z-resp-inp" value="${d.resp||''}" placeholder="Responsible name">
+        <div class="btn-row"><button class="save-btn" onclick="saveZoneField('resp','${id}')">Save</button><button class="cancel-btn" onclick="toggleZoneEdit('resp','${id}')">Cancel</button></div>
+      </div>
+    </div>
+    <div>
+      <div class="sec-title"><span>🪑 Elements in this area</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:3px;min-height:28px">${elemsHtml}</div>
+    </div>
+    <div>
+      <div class="sec-title"><span>📋 Rules & Guidelines</span><button class="edit-btn" onclick="toggleZoneEdit('rules','${id}')">Edit</button></div>
+      <div id="z-rules-disp" class="rules-box">${d.rules?d.rules.replace(/\n/g,'<br>'):'<span class="empty-hint">No rules yet — click Edit to add.</span>'}</div>
+      <div id="z-rules-edit" style="display:none;margin-top:8px">
+        <textarea class="field-ta" id="z-rules-inp" placeholder="e.g.&#10;- Keep area clean&#10;- Return tools after use">${d.rules||''}</textarea>
+        <div class="btn-row"><button class="save-btn" onclick="saveZoneField('rules','${id}')">Save</button><button class="cancel-btn" onclick="toggleZoneEdit('rules','${id}')">Cancel</button></div>
+      </div>
+    </div>
+    <div>
+      <div class="sec-title"><span>📦 Items stored here</span></div>
+      <div id="z-items-list">${itemsHtml||'<div class="empty-hint" style="padding:4px 0">No items yet.</div>'}</div>
+      <div class="add-row">
+        <input class="add-inp" id="z-new-name" placeholder="Item name..." onkeydown="if(event.key==='Enter')addZoneItem('${id}')">
+        <input class="add-qty" id="z-new-qty" type="number" min="1" value="1">
+        <button class="save-btn" onclick="addZoneItem('${id}')">+ Add</button>
+      </div>
+    </div>
+    <div><button class="del-btn" onclick="deleteZone('${id}')">🗑 Delete this zone</button></div>`;
+}
+
+function toggleZoneEdit(field,id){
+  const ed=document.getElementById('z-'+field+'-edit');
+  ed.style.display=ed.style.display==='none'?'block':'none';
+}
+
+function saveZoneField(field,id){
+  const d=getZoneData(id);
+  const val=document.getElementById('z-'+field+'-inp')||document.getElementById('z-'+field+'-ta');
+  const v=document.getElementById('z-'+field+(field==='rules'?'-inp':'-inp')).value.trim();
+  d[field]=v;
+  setZoneData(id,d);
+  // Update display
+  if(field==='areaName'){
+    document.getElementById('z-areaName-disp').innerHTML=v||'<span class="empty-hint">Click Edit to set a name</span>';
+    document.getElementById('sp-title').textContent=v||'Zone';
+  }else if(field==='resp'){
+    document.getElementById('z-resp-disp').innerHTML=`<div class="resp-av">${v?v.charAt(0).toUpperCase():'?'}</div><div class="resp-name">${v||'Not assigned'}</div>`;
+  }else if(field==='rules'){
+    document.getElementById('z-rules-disp').innerHTML=v?v.replace(/\n/g,'<br>'):'<span class="empty-hint">No rules yet — click Edit to add.</span>';
+  }
+  toggleZoneEdit(field,id);
+  renderZones();
+}
+
+function addZoneItem(id){
+  const name=document.getElementById('z-new-name').value.trim();
+  const qty=parseInt(document.getElementById('z-new-qty').value)||1;
+  if(!name)return;
+  const d=getZoneData(id);
+  if(!d.items)d.items=[];
+  const ex=d.items.find(i=>i.name.toLowerCase()===name.toLowerCase());
+  if(ex)ex.qty+=qty; else d.items.push({name,qty});
+  setZoneData(id,d);
+  document.getElementById('z-items-list').innerHTML=d.items.map((item,i)=>`
+    <div class="item-row">
+      <span class="item-name">${item.name}</span>
+      <div style="display:flex;align-items:center;gap:4px">
+        <button class="qty-btn" onclick="changeQty('${id}',${i},-1)">−</button>
+        <span class="qty-num">${item.qty}</span>
+        <button class="qty-btn" onclick="changeQty('${id}',${i},+1)">+</button>
+      </div>
+      <button class="item-del" onclick="removeItem('${id}',${i})">×</button>
+    </div>`).join('');
+  document.getElementById('z-new-name').value='';
+  document.getElementById('z-new-qty').value='1';
+  document.getElementById('z-new-name').focus();
+  renderZones();
+}
+
+function changeQty(zoneId,i,delta){
+  const d=getZoneData(zoneId);
+  d.items[i].qty=Math.max(1,d.items[i].qty+delta);
+  setZoneData(zoneId,d);
+  document.querySelectorAll('#z-items-list .qty-num')[i].textContent=d.items[i].qty;
+}
+
+function removeItem(zoneId,i){
+  const d=getZoneData(zoneId);
+  d.items.splice(i,1);setZoneData(zoneId,d);
+  document.getElementById('z-items-list').innerHTML=d.items.map((item,j)=>`
+    <div class="item-row">
+      <span class="item-name">${item.name}</span>
+      <div style="display:flex;align-items:center;gap:4px">
+        <button class="qty-btn" onclick="changeQty('${zoneId}',${j},-1)">−</button>
+        <span class="qty-num">${item.qty}</span>
+        <button class="qty-btn" onclick="changeQty('${zoneId}',${j},+1)">+</button>
+      </div>
+      <button class="item-del" onclick="removeItem('${zoneId}',${j})">×</button>
+    </div>`).join('')||'<div class="empty-hint" style="padding:4px 0">No items yet.</div>';
+  renderZones();
+}
+
+function deleteZone(id){
+  const allZones=getZones().filter(z=>z.id!==id);
+  setZones(allZones);zones=allZones;
+  closePanel();renderZones();
+}
+
+// ── ELEMENT PANEL (view mode) ──
+function openElemPanel(id){
+  currentElemId=id;currentZoneId=null;
+  highlightedIds=new Set([id]);
+  const e=ELEMENTS.find(el=>el.id===id);if(!e)return;
+  const ed=getElemData(id);
+  const displayName=ed.name||e.name;
+  renderElements();renderZones();
+  document.getElementById('sp-head').style.background=e.stroke||'#0f1f3d';
+  document.getElementById('sp-title').textContent=displayName;
+  // Build items HTML for this element
+  const elemItems=(ed.items||[]);
+  const elemItemsHtml=elemItems.map((item,i)=>`
+    <div class="item-row">
+      <span class="item-name">${item.name}</span>
+      <div style="display:flex;align-items:center;gap:4px">
+        <button class="qty-btn" onclick="changeElemQty('${id}',${i},-1)">−</button>
+        <span class="qty-num">${item.qty}</span>
+        <button class="qty-btn" onclick="changeElemQty('${id}',${i},+1)">+</button>
+      </div>
+      <button class="item-del" onclick="removeElemItem('${id}',${i})">×</button>
+    </div>`).join('');
+
+  document.getElementById('sp-body').innerHTML=`
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="width:14px;height:14px;border-radius:3px;background:${e.color};border:1px solid ${e.stroke};display:inline-block"></span>
+      <span style="font-size:13px;color:#888">${displayName}</span>
+    </div>
+    <div>
+      <div class="sec-title"><span>📋 Usage rules</span><button class="edit-btn" onclick="toggleElemRulesEdit('${id}')">Edit</button></div>
+      <div id="e-rules-disp" class="rules-box">${ed.rules?ed.rules.replace(/\n/g,'<br>'):'<span class="empty-hint">No rules defined yet — click Edit to add.</span>'}</div>
+      <div id="e-rules-edit" style="display:none;margin-top:8px">
+        <textarea class="field-ta" id="e-rules-inp" placeholder="e.g.&#10;- Clean after use&#10;- Max load 50kg&#10;- Report damage immediately">${ed.rules||''}</textarea>
+        <div class="btn-row">
+          <button class="save-btn" onclick="saveElemRules('${id}')">Save</button>
+          <button class="cancel-btn" onclick="toggleElemRulesEdit('${id}')">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="sec-title"><span>📦 Items stored here</span></div>
+      <div id="e-items-list">${elemItemsHtml||'<div class="empty-hint" style="padding:4px 0">No items yet.</div>'}</div>
+      <div class="add-row">
+        <input class="add-inp" id="e-new-name" placeholder="Item name..." onkeydown="if(event.key==='Enter')addElemItem('${id}')">
+        <input class="add-qty" id="e-new-qty" type="number" min="1" value="1">
+        <button class="save-btn" onclick="addElemItem('${id}')">+ Add</button>
+      </div>
+    </div>`;
+  document.getElementById('side-panel').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+}
+
+function toggleElemRulesEdit(id){
+  const ed=document.getElementById('e-rules-edit');
+  ed.style.display=ed.style.display==='none'?'block':'none';
+}
+
+function saveElemRules(id){
+  const v=document.getElementById('e-rules-inp').value.trim();
+  const ed=getElemData(id);ed.rules=v;setElemData(id,ed);
+  document.getElementById('e-rules-disp').innerHTML=v?v.replace(/\n/g,'<br>'):'<span class="empty-hint">No rules defined yet — click Edit to add.</span>';
+  toggleElemRulesEdit(id);
+  renderElements();
+}
+
+function addElemItem(id){
+  const name=document.getElementById('e-new-name').value.trim();
+  const qty=parseInt(document.getElementById('e-new-qty').value)||1;
+  if(!name)return;
+  const ed=getElemData(id);
+  if(!ed.items)ed.items=[];
+  const ex=ed.items.find(i=>i.name.toLowerCase()===name.toLowerCase());
+  if(ex)ex.qty+=qty; else ed.items.push({name,qty});
+  setElemData(id,ed);
+  refreshElemItemsList(id,ed);
+  document.getElementById('e-new-name').value='';
+  document.getElementById('e-new-qty').value='1';
+  document.getElementById('e-new-name').focus();
+}
+function changeElemQty(id,i,delta){
+  const ed=getElemData(id);
+  ed.items[i].qty=Math.max(1,ed.items[i].qty+delta);
+  setElemData(id,ed);
+  document.querySelectorAll('#e-items-list .qty-num')[i].textContent=ed.items[i].qty;
+}
+function removeElemItem(id,i){
+  const ed=getElemData(id);
+  ed.items.splice(i,1);setElemData(id,ed);
+  refreshElemItemsList(id,ed);
+}
+function refreshElemItemsList(id,ed){
+  const list=document.getElementById('e-items-list');if(!list)return;
+  list.innerHTML=ed.items.map((item,i)=>`
+    <div class="item-row">
+      <span class="item-name">${item.name}</span>
+      <div style="display:flex;align-items:center;gap:4px">
+        <button class="qty-btn" onclick="changeElemQty('${id}',${i},-1)">−</button>
+        <span class="qty-num">${item.qty}</span>
+        <button class="qty-btn" onclick="changeElemQty('${id}',${i},+1)">+</button>
+      </div>
+      <button class="item-del" onclick="removeElemItem('${id}',${i})">×</button>
+    </div>`).join('')||'<div class="empty-hint" style="padding:4px 0">No items yet.</div>';
+}
+
+// ── ELEMENT PANEL (edit mode) ──
+function openEditElemPanel(id){
+  currentElemId=id;currentZoneId=null;
+  highlightedIds=new Set([id]);
+  const e=ELEMENTS.find(el=>el.id===id);if(!e)return;
+  const ae=applyEPos(e);
+  const ed=getElemData(id);
+  const displayName=ed.name||e.name;
+  document.getElementById('sp-head').style.background='#1a1a2e';
+  document.getElementById('sp-title').textContent=displayName;
+  document.getElementById('sp-body').innerHTML=`
+    <div>
+      <div class="sec-title"><span>✏️ Rename</span></div>
+      <input class="field-inp" id="e-name-inp" value="${displayName}" placeholder="Element name">
+      <div class="btn-row">
+        <button class="save-btn" onclick="saveElemName('${id}')">Save</button>
+      </div>
+    </div>
+    <div>
+      <div class="sec-title"><span>📐 Position & Size</span></div>
+      <div class="dims-grid">
+        <div><div class="dim-lbl">X (m)</div><input class="field-inp" id="ep-x" type="number" value="${((ae.x-OX)/SNAP).toFixed(2)}" step="0.1" style="margin:0"></div>
+        <div><div class="dim-lbl">Y (m)</div><input class="field-inp" id="ep-y" type="number" value="${((ae.y-OY)/SNAP).toFixed(2)}" step="0.1" style="margin:0"></div>
+        <div><div class="dim-lbl">Width (m)</div><input class="field-inp" id="ep-w" type="number" value="${(ae.w/SNAP).toFixed(2)}" step="0.1" min="0.3" style="margin:0"></div>
+        <div><div class="dim-lbl">Depth (m)</div><input class="field-inp" id="ep-h" type="number" value="${(ae.h/SNAP).toFixed(2)}" step="0.1" min="0.3" style="margin:0"></div>
+      </div>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="save-btn" onclick="saveElemDims('${id}')">Apply</button>
+        <button class="cancel-btn" onclick="resetElem('${id}')">Reset to original</button>
+      </div>
+    </div>
+    <div>
+      <div id="del-confirm-${id}" style="display:none;background:#fff5f5;border:1px solid #fcc;border-radius:8px;padding:10px;margin-bottom:6px">
+        <div style="font-size:12px;color:#c0392b;font-weight:600;margin-bottom:6px">⚠ Delete this element?</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="deleteElem('${id}')" style="flex:1;padding:6px;background:#e74c3c;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600">Yes, delete</button>
+          <button onclick="document.getElementById('del-confirm-${id}').style.display='none'" style="flex:1;padding:6px;background:#f0f0f0;color:#555;border:none;border-radius:6px;font-size:12px;cursor:pointer">Cancel</button>
+        </div>
+      </div>
+      <button class="del-btn" onclick="document.getElementById('del-confirm-${id}').style.display='block'">🗑 Delete element</button>
+      </div>
+    </div>`;
+  document.getElementById('side-panel').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+}
+
+function saveElemName(id){
+  const v=document.getElementById('e-name-inp').value.trim();
+  const ed=getElemData(id);ed.name=v;setElemData(id,ed);
+  // Update ELEMENTS array name too
+  const el=ELEMENTS.find(e=>e.id===id);if(el&&v)el.name=v;
+  // Update custom elems storage
+  const custom=ls('wh_custom_elems')||[];
+  const ci=custom.findIndex(e=>e.id===id);
+  if(ci>-1){custom[ci].name=v;lsSet('wh_custom_elems',custom);}
+  document.getElementById('sp-title').textContent=v||el?.name||'Element';
+  renderElements();
+}
+
+function saveElemDims(id){
+  const e=ELEMENTS.find(el=>el.id===id);if(!e)return;
+  if(!elemPos[id])elemPos[id]={};
+  const xv=parseFloat(document.getElementById('ep-x').value);
+  const yv=parseFloat(document.getElementById('ep-y').value);
+  const wv=parseFloat(document.getElementById('ep-w').value);
+  const hv=parseFloat(document.getElementById('ep-h').value);
+  if(!isNaN(xv))elemPos[id].x=Math.round(xv*SNAP)+OX;
+  if(!isNaN(yv))elemPos[id].y=Math.round(yv*SNAP)+OY;
+  if(!isNaN(wv)&&wv>0)elemPos[id].w=Math.round(wv*SNAP);
+  if(!isNaN(hv)&&hv>0)elemPos[id].h=Math.round(hv*SNAP);
+  setElemPos(elemPos);
+  renderElements();
+  openEditElemPanel(id);
+}
+
+function resetElem(id){
+  delete elemPos[id];setElemPos(elemPos);
+  renderElements();openEditElemPanel(id);
+}
+
+// ── ADD ELEMENT PANEL ──
+const PRESETS=[
+  {name:'Shelf S',color:'#dda0dd',stroke:'#7d3c98',mw:1.0,mh:0.4},
+  {name:'Shelf M',color:'#dda0dd',stroke:'#7d3c98',mw:2.0,mh:0.4},
+  {name:'Shelf L',color:'#dda0dd',stroke:'#7d3c98',mw:3.0,mh:0.5},
+  {name:'Cabinet S',color:'#dda0dd',stroke:'#7d3c98',mw:1.0,mh:0.45},
+  {name:'Cabinet M',color:'#dda0dd',stroke:'#7d3c98',mw:1.2,mh:0.5},
+  {name:'Cabinet L',color:'#dda0dd',stroke:'#7d3c98',mw:2.0,mh:0.6},
+  {name:'Table S',color:'#87ceeb',stroke:'#2471a3',mw:1.2,mh:0.7},
+  {name:'Table M',color:'#87ceeb',stroke:'#2471a3',mw:1.8,mh:0.8},
+  {name:'Table L',color:'#87ceeb',stroke:'#2471a3',mw:2.4,mh:0.8},
+  {name:'Bench',color:'#87ceeb',stroke:'#2471a3',mw:2.4,mh:0.6},
+  {name:'Pallet',color:'#f4a460',stroke:'#c0622a',mw:1.2,mh:0.8},
+  {name:'Crate',color:'#f4a460',stroke:'#c0622a',mw:0.6,mh:0.6},
+  {name:'Machine',color:'#f4a460',stroke:'#c0622a',mw:1.5,mh:1.0},
+  {name:'Custom',color:'#87ceeb',stroke:'#2471a3',mw:1.0,mh:1.0},
+];
+let addPanelOpen=false;
+
+function toggleAddPanel(){
+  addPanelOpen=!addPanelOpen;
+  document.getElementById('add-panel').style.display=addPanelOpen?'block':'none';
+  document.getElementById('btn-add').style.background=addPanelOpen?'rgba(39,174,96,1)':'rgba(39,174,96,0.8)';
+}
+
+function addElemFromPreset(idx){
+  const p=PRESETS[idx];
+  const customName=idx===PRESETS.length-1?document.getElementById('custom-name-inp').value.trim()||p.name:p.name;
+  const customW=idx===PRESETS.length-1?parseFloat(document.getElementById('custom-w-inp').value)||p.mw:p.mw;
+  const customH=idx===PRESETS.length-1?parseFloat(document.getElementById('custom-h-inp').value)||p.mh:p.mh;
+  const id='new-'+Date.now()+'-'+Math.floor(Math.random()*99);
+  // Place in center of floor
+  const w=Math.round(customW*SNAP), h=Math.round(customH*SNAP);
+  const x=OX+Math.round((WF-w)/2/SNAP)*SNAP;
+  const y=OY+Math.round((HF-h)/2/SNAP)*SNAP;
+  // Save to localStorage only — will be loaded from there
+  const customElems=ls('wh_custom_elems')||[];
+  const newElem={id,label:'',name:customName,color:p.color,stroke:p.stroke,x,y,w,h,isNew:true};
+  customElems.push(newElem);
+  lsSet('wh_custom_elems',customElems);
+  // Save position
+  if(!elemPos[id])elemPos[id]={x,y,w,h};
+  setElemPos(elemPos);
+  // Save name in elem data
+  const ed=getElemData(id);ed.name=customName;setElemData(id,ed);
+  // Add to runtime array
+  ELEMENTS.push(newElem);
+  renderElements();
+  addPanelOpen=false;
+  document.getElementById('add-panel').style.display='none';
+  document.getElementById('btn-add').style.background='rgba(39,174,96,0.8)';
+  // Switch to edit mode to immediately move it
+  setMode('edit');
+  selectedElemId=id;
+  openEditElemPanel(id);
+}
+
+function deleteElem(id){
+  const idx=ELEMENTS.findIndex(e=>e.id===id);
+  if(idx>-1)ELEMENTS.splice(idx,1);
+  // Remove from custom elems storage
+  const custom=(ls('wh_custom_elems')||[]).filter(e=>e.id!==id);
+  lsSet('wh_custom_elems',custom);
+  // Save deleted ID so it doesn't come back on reload
+  const deleted=ls('wh_deleted_elems')||[];
+  if(!deleted.includes(id)){deleted.push(id);lsSet('wh_deleted_elems',deleted);}
+  // Remove position and data
+  delete elemPos[id];setElemPos(elemPos);
+  closePanel();
+  renderElements();
+}
+
+// ── INJECT DEFAULT DATA (only if not already set) ──
+(function(){
+  if(!localStorage.getItem("wh_epos")) localStorage.setItem("wh_epos", "{\"1\": {\"x\": 230, \"y\": 83, \"w\": 414, \"h\": 108}, \"3\": {\"x\": 266, \"y\": 47, \"w\": 72, \"h\": 22}, \"5\": {\"x\": 122, \"y\": 47, \"w\": 72, \"h\": 22}, \"6\": {\"x\": 194, \"y\": 47, \"w\": 72, \"h\": 22}, \"9\": {\"x\": 58.57511901855469, \"y\": 393.9653015136719}, \"11\": {\"x\": 50.71265411376953, \"y\": 300.11865234375, \"w\": 72, \"h\": 32}, \"12\": {\"x\": 385.2680358886719, \"y\": 379.3101806640625}, \"13\": {\"x\": 443.0074768066406, \"y\": 443.7583312988281}, \"15\": {\"x\": 683.5474243164062, \"y\": 352.5975341796875, \"w\": 137, \"h\": 115}, \"18\": {\"x\": 124.197265625, \"y\": 295.2601013183594, \"w\": 22, \"h\": 36}, \"19\": {\"x\": 123.73370361328125, \"y\": 256.9964904785156, \"w\": 22, \"h\": 36}, \"21\": {\"x\": 50, \"y\": 47, \"w\": 47, \"h\": 11}, \"new-1787729665476-39\": {\"x\": 120.90422058105469, \"y\": 81.90422058105469, \"w\": 108, \"h\": 54}, \"new-1787729717136-78\": {\"x\": 121.45211791992188, \"y\": 138.015380859375, \"w\": 108, \"h\": 54}, \"new-1787731091300-57\": {\"x\": 127.2882080078125, \"y\": 302.6089782714844, \"w\": 14, \"h\": 22}, \"new-1787731223907-72\": {\"x\": 228.10018157958984, \"y\": 293.7776794433594, \"w\": 65, \"h\": 36}, \"new-1787731290640-6\": {\"x\": 227.68980407714844, \"y\": 254.47891235351562, \"w\": 65, \"h\": 36}, \"new-1787731375126-2\": {\"x\": 294.94287109375, \"y\": 254.78164672851562, \"w\": 65, \"h\": 36}, \"new-1787731391108-83\": {\"x\": 296.03868103027344, \"y\": 294.22979736328125, \"w\": 65, \"h\": 36}, \"new-1787731452889-59\": {\"x\": 220.42967224121094, \"y\": 442.160400390625, \"w\": 65, \"h\": 29}, \"new-1787731465015-86\": {\"x\": 288.3682098388672, \"y\": 443, \"w\": 65, \"h\": 29}, \"new-1787731551900-67\": {\"x\": 186.46043395996094, \"y\": 397.2333068847656, \"w\": 29, \"h\": 72}, \"new-1787731718958-13\": {\"x\": 769.9644165039062, \"y\": 195.60940551757812, \"w\": 36, \"h\": 108}, \"new-1787732257102-73\": {\"x\": 469.7201232910156, \"y\": 243.27590942382812, \"w\": 65, \"h\": 29}, \"new-1787732283231-14\": {\"x\": 605.0492248535156, \"y\": 242.18017578125, \"w\": 65, \"h\": 29}, \"new-1787732294976-25\": {\"x\": 537.1106567382812, \"y\": 242.72802734375, \"w\": 65, \"h\": 29}, \"new-1787732305489-8\": {\"x\": 605.59716796875, \"y\": 275.0535888671875, \"w\": 65, \"h\": 29}, \"new-1787732310049-17\": {\"x\": 537.6585693359375, \"y\": 275.0535888671875, \"w\": 65, \"h\": 29}, \"new-1787732316589-26\": {\"x\": 470.2679748535156, \"y\": 275.60150146484375, \"w\": 65, \"h\": 29}, \"new-1787732462063-9\": {\"x\": 476.2947692871094, \"y\": 440.5166931152344, \"w\": 65, \"h\": 29}, \"new-1787732486714-64\": {\"x\": 543.6853637695312, \"y\": 426.27154541015625, \"w\": 25, \"h\": 43}, \"new-1787732511944-38\": {\"x\": 542.589599609375, \"y\": 379.7008056640625, \"w\": 25, \"h\": 43}, \"new-1787732536971-69\": {\"x\": 571.0799865722656, \"y\": 447.6393127441406, \"w\": 22, \"h\": 22}, \"new-1787732647609-94\": {\"x\": 595.440673828125, \"y\": 448.5210876464844, \"w\": 72, \"h\": 22}, \"new-1787732757570-16\": {\"x\": 554.0953369140625, \"y\": 48.22669982910156, \"w\": 72, \"h\": 22}, \"new-1787732850897-0\": {\"x\": 211.66343688964844, \"y\": 255.32952880859375, \"w\": 14, \"h\": 72}, \"new-1787733723937-52\": {\"x\": 481.82086181640625, \"y\": 444.7070007324219, \"w\": 54, \"h\": 22}, \"new-1787733954670-34\": {\"x\": 332.7473449707031, \"y\": 255.49034118652344, \"w\": 25, \"h\": 25}, \"new-1787734269000-9\": {\"x\": 339.32208251953125, \"y\": 47, \"w\": 72, \"h\": 22}}");
+  if(!localStorage.getItem("wh_custom_elems")) localStorage.setItem("wh_custom_elems", "[{\"id\": \"new-1787729665476-39\", \"label\": \"\", \"name\": \"Table 1\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 120.90422058105469, \"y\": 81.90422058105469, \"w\": 108, \"h\": 54, \"isNew\": true}, {\"id\": \"new-1787729717136-78\", \"label\": \"\", \"name\": \"Table 2\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 121.45211791992188, \"y\": 138.015380859375, \"w\": 108, \"h\": 54, \"isNew\": true}, {\"id\": \"new-1787731091300-57\", \"label\": \"\", \"name\": \"Reflow oven\", \"color\": \"#f4a460\", \"stroke\": \"#c0622a\", \"x\": 127.2882080078125, \"y\": 302.6089782714844, \"w\": 14, \"h\": 22, \"isNew\": true}, {\"id\": \"new-1787731223907-72\", \"label\": \"\", \"name\": \"Table 7\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 228.10018157958984, \"y\": 293.7776794433594, \"w\": 65, \"h\": 36, \"isNew\": true}, {\"id\": \"new-1787731290640-6\", \"label\": \"\", \"name\": \"Table 6\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 227.68980407714844, \"y\": 254.47891235351562, \"w\": 65, \"h\": 36, \"isNew\": true}, {\"id\": \"new-1787731375126-2\", \"label\": \"\", \"name\": \"Table 8\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 294.94287109375, \"y\": 254.78164672851562, \"w\": 65, \"h\": 36, \"isNew\": true}, {\"id\": \"new-1787731391108-83\", \"label\": \"\", \"name\": \"Table 9\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 296.03868103027344, \"y\": 294.22979736328125, \"w\": 65, \"h\": 36, \"isNew\": true}, {\"id\": \"new-1787731452889-59\", \"label\": \"\", \"name\": \"Table 10\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 220.42967224121094, \"y\": 442.160400390625, \"w\": 65, \"h\": 29, \"isNew\": true}, {\"id\": \"new-1787731465015-86\", \"label\": \"\", \"name\": \"Table 11\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 288.3682098388672, \"y\": 443, \"w\": 65, \"h\": 29, \"isNew\": true}, {\"id\": \"new-1787731551900-67\", \"label\": \"\", \"name\": \"Table 12\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 186.46043395996094, \"y\": 397.2333068847656, \"w\": 29, \"h\": 72, \"isNew\": true}, {\"id\": \"new-1787731718958-13\", \"label\": \"\", \"name\": \"Lunch Table\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 769.9644165039062, \"y\": 195.60940551757812, \"w\": 36, \"h\": 108, \"isNew\": true}, {\"id\": \"new-1787732257102-73\", \"label\": \"\", \"name\": \"Table 13\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 469.7201232910156, \"y\": 243.27590942382812, \"w\": 65, \"h\": 29, \"isNew\": true}, {\"id\": \"new-1787732283231-14\", \"label\": \"\", \"name\": \"Table 17\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 605.0492248535156, \"y\": 242.18017578125, \"w\": 65, \"h\": 29, \"isNew\": true}, {\"id\": \"new-1787732294976-25\", \"label\": \"\", \"name\": \"Table 15\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 537.1106567382812, \"y\": 242.72802734375, \"w\": 65, \"h\": 29, \"isNew\": true}, {\"id\": \"new-1787732305489-8\", \"label\": \"\", \"name\": \"Table 18\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 605.59716796875, \"y\": 275.0535888671875, \"w\": 65, \"h\": 29, \"isNew\": true}, {\"id\": \"new-1787732310049-17\", \"label\": \"\", \"name\": \"Table 16\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 537.6585693359375, \"y\": 275.0535888671875, \"w\": 65, \"h\": 29, \"isNew\": true}, {\"id\": \"new-1787732316589-26\", \"label\": \"\", \"name\": \"Table 14\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 470.2679748535156, \"y\": 275.60150146484375, \"w\": 65, \"h\": 29, \"isNew\": true}, {\"id\": \"new-1787732462063-9\", \"label\": \"\", \"name\": \"Table 19\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 476.2947692871094, \"y\": 440.5166931152344, \"w\": 65, \"h\": 29, \"isNew\": true}, {\"id\": \"new-1787732486714-64\", \"label\": \"\", \"name\": \"Table 20\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 543.6853637695312, \"y\": 426.27154541015625, \"w\": 25, \"h\": 43, \"isNew\": true}, {\"id\": \"new-1787732511944-38\", \"label\": \"\", \"name\": \"Table 21\", \"color\": \"#87ceeb\", \"stroke\": \"#2471a3\", \"x\": 542.589599609375, \"y\": 379.7008056640625, \"w\": 25, \"h\": 43, \"isNew\": true}, {\"id\": \"new-1787732536971-69\", \"label\": \"\", \"name\": \"Dry Cabinet\", \"color\": \"#dda0dd\", \"stroke\": \"#7d3c98\", \"x\": 571.0799865722656, \"y\": 447.6393127441406, \"w\": 22, \"h\": 22, \"isNew\": true}, {\"id\": \"new-1787732647609-94\", \"label\": \"\", \"name\": \"Shelf 6\", \"color\": \"#dda0dd\", \"stroke\": \"#7d3c98\", \"x\": 595.440673828125, \"y\": 448.5210876464844, \"w\": 72, \"h\": 22, \"isNew\": true}, {\"id\": \"new-1787732757570-16\", \"label\": \"\", \"name\": \"Shelf 5\", \"color\": \"#dda0dd\", \"stroke\": \"#7d3c98\", \"x\": 554.0953369140625, \"y\": 48.22669982910156, \"w\": 72, \"h\": 22, \"isNew\": true}, {\"id\": \"new-1787732850897-0\", \"label\": \"\", \"name\": \"Rolling shelf\", \"color\": \"#dda0dd\", \"stroke\": \"#7d3c98\", \"x\": 211.66343688964844, \"y\": 255.32952880859375, \"w\": 14, \"h\": 72, \"isNew\": true}, {\"id\": \"new-1787733723937-52\", \"label\": \"\", \"name\": \"Solar Simulator\", \"color\": \"#f4a460\", \"stroke\": \"#c0622a\", \"x\": 481.82086181640625, \"y\": 444.7070007324219, \"w\": 54, \"h\": 22, \"isNew\": true}, {\"id\": \"new-1787733954670-34\", \"label\": \"\", \"name\": \"Robotic arm\", \"color\": \"#f4a460\", \"stroke\": \"#c0622a\", \"x\": 332.7473449707031, \"y\": 255.49034118652344, \"w\": 25, \"h\": 25, \"isNew\": true}, {\"id\": \"new-1787734269000-9\", \"label\": \"\", \"name\": \"Shelf 4\", \"color\": \"#dda0dd\", \"stroke\": \"#7d3c98\", \"x\": 339.32208251953125, \"y\": 47, \"w\": 72, \"h\": 22, \"isNew\": true}]");
+  if(!localStorage.getItem("wh_deleted_elems")) localStorage.setItem("wh_deleted_elems", "[\"20\", \"22\", \"7\", \"8\", \"4\", \"new-1787730517775-37\", \"10\", \"14\", \"16\", \"17a\", \"17b\", \"2\", \"new-1787732739203-68\", \"new-1787732745556-59\", \"new-1787732753468-75\"]");
+  if(!localStorage.getItem("wh_zones")) localStorage.setItem("wh_zones", "[{\"id\": \"z1787732998781\", \"x\": 224.27, \"y\": 75.43, \"w\": 436.12, \"h\": 123.82, \"fill\": \"rgba(52,152,219,0.18)\", \"stroke\": \"rgba(41,128,185,0.8)\"}, {\"id\": \"z1787733236397\", \"x\": 214.71, \"y\": 242.77, \"w\": 80.8, \"h\": 94.26, \"fill\": \"rgba(46,204,113,0.18)\", \"stroke\": \"rgba(39,174,96,0.8)\"}, {\"id\": \"z1787733503386\", \"x\": 173.19, \"y\": 386.41, \"w\": 188.53, \"h\": 85.59, \"fill\": \"rgba(231,76,60,0.18)\", \"stroke\": \"rgba(192,57,43,0.8)\"}, {\"id\": \"z1787733542080\", \"x\": 50, \"y\": 240.53, \"w\": 113.09, \"h\": 103.24, \"fill\": \"rgba(155,89,182,0.18)\", \"stroke\": \"rgba(125,60,152,0.8)\"}, {\"id\": \"z1787733634942\", \"x\": 372.94, \"y\": 368.46, \"w\": 59.48, \"h\": 100.99, \"fill\": \"rgba(26,188,156,0.18)\", \"stroke\": \"rgba(22,160,133,0.8)\"}, {\"id\": \"z1787733803016\", \"x\": 437.95, \"y\": 368.73, \"w\": 235.05, \"h\": 99.72, \"fill\": \"rgba(241,196,15,0.2)\", \"stroke\": \"rgba(243,156,18,0.9)\"}, {\"id\": \"z1787733885770\", \"x\": 677.37, \"y\": 342.43, \"w\": 152.86, \"h\": 128.21, \"fill\": \"rgba(155,89,182,0.18)\", \"stroke\": \"rgba(125,60,152,0.8)\"}, {\"id\": \"z1787734004087\", \"x\": 293.85, \"y\": 243.08, \"w\": 73.97, \"h\": 94.79, \"fill\": \"rgba(127,140,141,0.18)\", \"stroke\": \"rgba(100,110,110,0.7)\"}, {\"id\": \"z1787734089492\", \"x\": 455.99, \"y\": 230.43, \"w\": 227.81, \"h\": 88.65, \"fill\": \"rgba(52,152,219,0.18)\", \"stroke\": \"rgba(41,128,185,0.8)\"}, {\"id\": \"z1787734118708\", \"x\": 758.98, \"y\": 49.75, \"w\": 75.02, \"h\": 135.79, \"fill\": \"rgba(52,152,219,0.18)\", \"stroke\": \"rgba(41,128,185,0.8)\"}, {\"id\": \"z1787734202025\", \"x\": 542.59, \"y\": 48.58, \"w\": 92.05, \"h\": 24.66, \"fill\": \"rgba(46,204,113,0.18)\", \"stroke\": \"rgba(39,174,96,0.8)\"}, {\"id\": \"z1787734391744\", \"x\": 116.33, \"y\": 48.03, \"w\": 77.8, \"h\": 24.11, \"fill\": \"rgba(241,196,15,0.2)\", \"stroke\": \"rgba(243,156,18,0.9)\"}, {\"id\": \"z1787734548606\", \"x\": 113.59, \"y\": 76.52, \"w\": 122.18, \"h\": 122.73, \"fill\": \"rgba(46,204,113,0.18)\", \"stroke\": \"rgba(39,174,96,0.8)\"}, {\"id\": \"z1787734613952\", \"x\": 191.4, \"y\": 47, \"w\": 148.48, \"h\": 25.14, \"fill\": \"rgba(231,76,60,0.18)\", \"stroke\": \"rgba(192,57,43,0.8)\"}, {\"id\": \"z1787734641404\", \"x\": 335.49, \"y\": 47, \"w\": 80.54, \"h\": 24.59, \"fill\": \"rgba(46,204,113,0.18)\", \"stroke\": \"rgba(39,174,96,0.8)\"}]");
+  if(!localStorage.getItem("wh_zdata_z1787734202025")) localStorage.setItem("wh_zdata_z1787734202025", "{\"areaName\": \"Solar Y materials\", \"resp\": \"Nicol\u00f2 Greco\", \"rules\": \"\", \"items\": []}");
+  if(!localStorage.getItem("wh_edata_3")) localStorage.setItem("wh_edata_3", "{\"name\": \"Shelf 3\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_6")) localStorage.setItem("wh_edata_6", "{\"name\": \"Shelf 1\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_5")) localStorage.setItem("wh_edata_5", "{\"name\": \"Cabinet 1\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_9")) localStorage.setItem("wh_edata_9", "{\"name\": \"Roll holder\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_11")) localStorage.setItem("wh_edata_11", "{\"name\": \"Table 3\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_12")) localStorage.setItem("wh_edata_12", "{\"name\": \"Vacuum Press\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_13")) localStorage.setItem("wh_edata_13", "{\"name\": \"Fridge\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_15")) localStorage.setItem("wh_edata_15", "{\"name\": \"Clean room\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_18")) localStorage.setItem("wh_edata_18", "{\"name\": \"Table 4\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_19")) localStorage.setItem("wh_edata_19", "{\"name\": \"Table 5\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_21")) localStorage.setItem("wh_edata_21", "{\"name\": \"Elec. panel\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_1")) localStorage.setItem("wh_edata_1", "{\"name\": \"Laminator\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787729665476-39")) localStorage.setItem("wh_edata_new-1787729665476-39", "{\"name\": \"Table 1\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787729717136-78")) localStorage.setItem("wh_edata_new-1787729717136-78", "{\"name\": \"Table 2\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787731091300-57")) localStorage.setItem("wh_edata_new-1787731091300-57", "{\"name\": \"Reflow oven\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787731223907-72")) localStorage.setItem("wh_edata_new-1787731223907-72", "{\"name\": \"Table 7\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787731290640-6")) localStorage.setItem("wh_edata_new-1787731290640-6", "{\"name\": \"Table 6\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787731375126-2")) localStorage.setItem("wh_edata_new-1787731375126-2", "{\"name\": \"Table 8\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787731391108-83")) localStorage.setItem("wh_edata_new-1787731391108-83", "{\"name\": \"Table 9\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787731452889-59")) localStorage.setItem("wh_edata_new-1787731452889-59", "{\"name\": \"Table 10\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787731465015-86")) localStorage.setItem("wh_edata_new-1787731465015-86", "{\"name\": \"Table 11\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787731551900-67")) localStorage.setItem("wh_edata_new-1787731551900-67", "{\"name\": \"Table 12\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787731718958-13")) localStorage.setItem("wh_edata_new-1787731718958-13", "{\"name\": \"Lunch Table\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787732257102-73")) localStorage.setItem("wh_edata_new-1787732257102-73", "{\"name\": \"Table 13\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787732283231-14")) localStorage.setItem("wh_edata_new-1787732283231-14", "{\"name\": \"Table 17\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787732294976-25")) localStorage.setItem("wh_edata_new-1787732294976-25", "{\"name\": \"Table 15\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787732305489-8")) localStorage.setItem("wh_edata_new-1787732305489-8", "{\"name\": \"Table 18\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787732310049-17")) localStorage.setItem("wh_edata_new-1787732310049-17", "{\"name\": \"Table 16\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787732316589-26")) localStorage.setItem("wh_edata_new-1787732316589-26", "{\"name\": \"Table 14\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787732462063-9")) localStorage.setItem("wh_edata_new-1787732462063-9", "{\"name\": \"Table 19\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787732486714-64")) localStorage.setItem("wh_edata_new-1787732486714-64", "{\"name\": \"Table 20\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787732511944-38")) localStorage.setItem("wh_edata_new-1787732511944-38", "{\"name\": \"Table 21\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787732536971-69")) localStorage.setItem("wh_edata_new-1787732536971-69", "{\"name\": \"Dry Cabinet\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787732647609-94")) localStorage.setItem("wh_edata_new-1787732647609-94", "{\"name\": \"Shelf 6\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787732757570-16")) localStorage.setItem("wh_edata_new-1787732757570-16", "{\"name\": \"Shelf 5\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787732850897-0")) localStorage.setItem("wh_edata_new-1787732850897-0", "{\"name\": \"Rolling shelf\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787733723937-52")) localStorage.setItem("wh_edata_new-1787733723937-52", "{\"name\": \"Solar Simulator\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787733954670-34")) localStorage.setItem("wh_edata_new-1787733954670-34", "{\"name\": \"Robotic arm\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_edata_new-1787734269000-9")) localStorage.setItem("wh_edata_new-1787734269000-9", "{\"name\": \"Shelf 4\", \"rules\": \"\"}");
+  if(!localStorage.getItem("wh_zdata_z1787732998781")) localStorage.setItem("wh_zdata_z1787732998781", "{\"areaName\": \"Laminator Ecolam 05\", \"resp\": \"Giulia Bellezza\", \"rules\": \"\", \"items\": []}");
+  if(!localStorage.getItem("wh_zdata_z1787733236397")) localStorage.setItem("wh_zdata_z1787733236397", "{\"areaName\": \"Solar Y tables\", \"resp\": \"Nicol\u00f2 Greco\", \"rules\": \"\", \"items\": []}");
+  if(!localStorage.getItem("wh_zdata_z1787733503386")) localStorage.setItem("wh_zdata_z1787733503386", "{\"areaName\": \"Mechanical area\", \"resp\": \"Marco Gallipoli, Davide Grasso\", \"rules\": \"\", \"items\": []}");
+  if(!localStorage.getItem("wh_zdata_z1787733542080")) localStorage.setItem("wh_zdata_z1787733542080", "{\"areaName\": \"ESD Area\", \"resp\": \"Giorgia Cifarelli\", \"rules\": \"\", \"items\": []}");
+  if(!localStorage.getItem("wh_zdata_z1787733634942")) localStorage.setItem("wh_zdata_z1787733634942", "{\"areaName\": \"TVC Laminator\", \"resp\": \"Marco Gallipoli\", \"rules\": \"\", \"items\": []}");
+  if(!localStorage.getItem("wh_zdata_z1787733803016")) localStorage.setItem("wh_zdata_z1787733803016", "{\"areaName\": \"Solar Area\", \"resp\": \"Oleksii Omelianovych\", \"rules\": \"\", \"items\": []}");
+  if(!localStorage.getItem("wh_zdata_z1787733885770")) localStorage.setItem("wh_zdata_z1787733885770", "{\"areaName\": \"Clean Tent Area\", \"resp\": \"Giorgia Cifarelli\", \"rules\": \"\", \"items\": []}");
+  if(!localStorage.getItem("wh_zdata_z1787734004087")) localStorage.setItem("wh_zdata_z1787734004087", "{\"areaName\": \"Robotic Arm Area\", \"resp\": \"Davide Grasso\", \"rules\": \"\", \"items\": []}");
+  if(!localStorage.getItem("wh_zdata_z1787734089492")) localStorage.setItem("wh_zdata_z1787734089492", "{\"areaName\": \"Office Area 1\", \"resp\": \"Giulia Bellezza\", \"rules\": \"\", \"items\": []}");
+  if(!localStorage.getItem("wh_zdata_z1787734118708")) localStorage.setItem("wh_zdata_z1787734118708", "{\"areaName\": \"Office Area 2\", \"resp\": \"Giulia Bellezza\", \"rules\": \"\", \"items\": []}");
+  if(!localStorage.getItem("wh_zdata_z1787734391744")) localStorage.setItem("wh_zdata_z1787734391744", "{\"areaName\": \"Chemicals Storage\", \"resp\": \"Oleksii Omelianovych\", \"rules\": \"\", \"items\": []}");
+  if(!localStorage.getItem("wh_zdata_z1787734548606")) localStorage.setItem("wh_zdata_z1787734548606", "{\"areaName\": \"Solar Y assembly\", \"resp\": \"Nicol\u00f2 Greco\", \"rules\": \"\", \"items\": []}");
+  if(!localStorage.getItem("wh_zdata_z1787734613952")) localStorage.setItem("wh_zdata_z1787734613952", "{\"areaName\": \"Storage components for TVP lamination\", \"resp\": \"Marco Gallipoli\", \"rules\": \"\", \"items\": []}");
+  if(!localStorage.getItem("wh_zdata_z1787734641404")) localStorage.setItem("wh_zdata_z1787734641404", "{\"areaName\": \"Solar Y Storage\", \"resp\": \"Nicol\u00f2 Greco\", \"rules\": \"\", \"items\": []}");
+})();
+
+// ── VIEW MODE (elements / areas) ──
+let currentView = 'elements'; // 'elements' or 'areas'
+let highlightedIds = new Set(); // IDs to highlight (empty = no filter active)
+
+function setView(v){
+  currentView=v;
+  document.getElementById('vtab-elements').className='vtab'+(v==='elements'?' active':'');
+  document.getElementById('vtab-areas').className='vtab'+(v==='areas'?' active':'');
+  document.getElementById('lp-title').textContent=v==='elements'?'Elements':'Areas';
+  renderElements();
+  renderZones();
+  renderListPanel();
+  populateListFilter();
+}
+
+// ── LIST PANEL ──
+function populateListFilter(){
+  const sel=document.getElementById('lp-filter');
+  const cur=sel.value;
+  if(currentView==='elements'){
+    // Filter by zone
+    const zoneNames=[...new Set(zones.map(z=>{const d=getZoneData(z.id);return d.areaName;}).filter(Boolean))].sort();
+    sel.innerHTML='<option value="">All zones</option>'+zoneNames.map(n=>`<option value="${n}">${n}</option>`).join('');
+  }else{
+    // Filter by responsible
+    const resps=[...new Set(zones.map(z=>{const d=getZoneData(z.id);return d.resp;}).filter(Boolean))].sort();
+    sel.innerHTML='<option value="">All responsible</option>'+resps.map(r=>`<option value="${r}">${r}</option>`).join('');
+  }
+  sel.value=cur;
+}
+
+function renderListPanel(){
+  const search=(document.getElementById('lp-search').value||'').toLowerCase();
+  const filter=document.getElementById('lp-filter').value;
+  const list=document.getElementById('lp-list');
+  const hasFilter=!!(search||filter);
+
+  if(currentView==='elements'){
+    // List all elements
+    let items=ELEMENTS.map(e=>{
+      const ed=getElemData(e.id);
+      const ae=applyEPos(e);
+      const name=ed.name||e.name;
+      const zone=zones.find(z=>ae.x>=z.x&&ae.x+ae.w<=z.x+z.w&&ae.y>=z.y&&ae.y+ae.h<=z.y+z.h);
+      const zoneName=zone?getZoneData(zone.id).areaName||'':'';
+      return {id:e.id,name,color:ae.color,stroke:ae.stroke,zoneName,hasRules:!!ed.rules};
+    });
+    if(search)items=items.filter(i=>i.name.toLowerCase().includes(search)||i.zoneName.toLowerCase().includes(search));
+    if(filter)items=items.filter(i=>i.zoneName===filter);
+    if(!items.length){list.innerHTML='<div class="lp-empty">No elements found</div>';return;}
+    list.innerHTML=items.map(i=>`
+      <div class="lp-item${currentElemId===i.id?' active':''}" onclick="openElemPanel('${i.id}')">
+        <span class="lp-dot" style="background:${i.color};border:1px solid ${i.stroke}"></span>
+        <div style="flex:1;min-width:0">
+          <div class="lp-name">${i.name}</div>
+          ${i.zoneName?`<div class="lp-sub">${i.zoneName}</div>`:''}
+        </div>
+        ${i.hasRules?'<span style="font-size:10px">🟡</span>':''}
+      </div>`).join('');
+  }else{
+    // List all zones
+    let allZones=zones.map(z=>{
+      const d=getZoneData(z.id);
+      const itemCount=(d.items||[]).length;
+      return {id:z.id,name:d.areaName||'(unnamed)',resp:d.resp||'',fill:z.fill,stroke:z.stroke,itemCount};
+    });
+    let items=[...allZones];
+    if(search)items=items.filter(i=>i.name.toLowerCase().includes(search)||i.resp.toLowerCase().includes(search));
+    if(filter)items=items.filter(i=>i.resp===filter);
+    // Update highlight
+    highlightedIds=hasFilter?new Set(items.map(i=>i.id)):new Set();
+    renderZones();renderElements();
+    if(!items.length){list.innerHTML='<div class="lp-empty">No areas found</div>';return;}
+    list.innerHTML=items.map(i=>`
+      <div class="lp-item${currentZoneId===i.id?' active':''}" onclick="openZonePanel('${i.id}');highlightSingle('${i.id}','zone')">
+        <span class="lp-dot" style="background:${i.fill};border:1px solid ${i.stroke}"></span>
+        <div style="flex:1;min-width:0">
+          <div class="lp-name">${i.name}</div>
+          ${i.resp?`<div class="lp-sub">👤 ${i.resp}</div>`:''}
+        </div>
+        ${i.itemCount>0?`<span class="lp-badge">${i.itemCount}</span>`:''}
+      </div>`).join('');
+  }
+}
+
+// ── INIT ──
+(async function(){
+  // 1. Render immediately with localStorage
+  zones=getZones();elemPos=getElemPos();
+  const sc0=ls('wh_custom_elems')||[];
+  sc0.forEach(e=>{if(!ELEMENTS.find(el=>el.id===e.id)){const ed=getElemData(e.id);if(ed.name)e.name=ed.name;ELEMENTS.push(e);}});
+  const di0=ls('wh_deleted_elems')||[];
+  di0.forEach(id=>{const idx=ELEMENTS.findIndex(e=>e.id===id);if(idx>-1)ELEMENTS.splice(idx,1);});
+  renderElements();renderZones();populateListFilter();renderListPanel();
+
+  // 2. Load from Firebase
+  await loadFromFirebase();
+  zones=getZones();elemPos=getElemPos();
+  const sc1=ls('wh_custom_elems')||[];
+  sc1.forEach(e=>{if(!ELEMENTS.find(el=>el.id===e.id)){const ed=getElemData(e.id);if(ed.name)e.name=ed.name;ELEMENTS.push(e);}});
+  const di1=ls('wh_deleted_elems')||[];
+  di1.forEach(id=>{const idx=ELEMENTS.findIndex(e=>e.id===id);if(idx>-1)ELEMENTS.splice(idx,1);});
+  renderElements();renderZones();populateListFilter();renderListPanel();
+
+  // 3. Real-time sync
+  startRealtimeSync();
+})();
+</script>
+<!-- ADD ELEMENT PANEL -->
+<div id="add-panel" style="display:none;position:fixed;top:52px;right:16px;background:#fff;border-radius:12px;border:1px solid #e0e0e0;box-shadow:0 8px 32px rgba(0,0,0,0.12);z-index:200;width:260px;max-height:80vh;overflow-y:auto">
+  <div style="padding:12px 14px;border-bottom:1px solid #f0f0f0;font-size:12px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;display:flex;justify-content:space-between;align-items:center">
+    Add element
+    <button onclick="toggleAddPanel()" style="background:none;border:none;cursor:pointer;font-size:18px;color:#aaa;line-height:1">×</button>
+  </div>
+  <div style="padding:10px 12px;display:flex;flex-direction:column;gap:5px">
+    <div style="font-size:10px;font-weight:700;color:#bbb;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">Shelves & Cabinets</div>
+    <button onclick="addElemFromPreset(0)" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #eee;border-radius:7px;background:#faf5ff;cursor:pointer;font-size:12px;font-weight:500;text-align:left"><span style="width:12px;height:12px;border-radius:2px;background:#dda0dd;border:1px solid #7d3c98;flex-shrink:0"></span>Shelf S — 1.0×0.4m</button>
+    <button onclick="addElemFromPreset(1)" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #eee;border-radius:7px;background:#faf5ff;cursor:pointer;font-size:12px;font-weight:500;text-align:left"><span style="width:12px;height:12px;border-radius:2px;background:#dda0dd;border:1px solid #7d3c98;flex-shrink:0"></span>Shelf M — 2.0×0.4m</button>
+    <button onclick="addElemFromPreset(2)" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #eee;border-radius:7px;background:#faf5ff;cursor:pointer;font-size:12px;font-weight:500;text-align:left"><span style="width:12px;height:12px;border-radius:2px;background:#dda0dd;border:1px solid #7d3c98;flex-shrink:0"></span>Shelf L — 3.0×0.5m</button>
+    <button onclick="addElemFromPreset(3)" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #eee;border-radius:7px;background:#faf5ff;cursor:pointer;font-size:12px;font-weight:500;text-align:left"><span style="width:12px;height:12px;border-radius:2px;background:#dda0dd;border:1px solid #7d3c98;flex-shrink:0"></span>Cabinet S — 1.0×0.45m</button>
+    <button onclick="addElemFromPreset(4)" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #eee;border-radius:7px;background:#faf5ff;cursor:pointer;font-size:12px;font-weight:500;text-align:left"><span style="width:12px;height:12px;border-radius:2px;background:#dda0dd;border:1px solid #7d3c98;flex-shrink:0"></span>Cabinet M — 1.2×0.5m</button>
+    <button onclick="addElemFromPreset(5)" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #eee;border-radius:7px;background:#faf5ff;cursor:pointer;font-size:12px;font-weight:500;text-align:left"><span style="width:12px;height:12px;border-radius:2px;background:#dda0dd;border:1px solid #7d3c98;flex-shrink:0"></span>Cabinet L — 2.0×0.6m</button>
+    <div style="font-size:10px;font-weight:700;color:#bbb;text-transform:uppercase;letter-spacing:0.5px;margin:4px 0 2px">Tables & Benches</div>
+    <button onclick="addElemFromPreset(6)" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #eee;border-radius:7px;background:#eff8ff;cursor:pointer;font-size:12px;font-weight:500;text-align:left"><span style="width:12px;height:12px;border-radius:2px;background:#87ceeb;border:1px solid #2471a3;flex-shrink:0"></span>Table S — 1.2×0.7m</button>
+    <button onclick="addElemFromPreset(7)" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #eee;border-radius:7px;background:#eff8ff;cursor:pointer;font-size:12px;font-weight:500;text-align:left"><span style="width:12px;height:12px;border-radius:2px;background:#87ceeb;border:1px solid #2471a3;flex-shrink:0"></span>Table M — 1.8×0.8m</button>
+    <button onclick="addElemFromPreset(8)" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #eee;border-radius:7px;background:#eff8ff;cursor:pointer;font-size:12px;font-weight:500;text-align:left"><span style="width:12px;height:12px;border-radius:2px;background:#87ceeb;border:1px solid #2471a3;flex-shrink:0"></span>Table L — 2.4×0.8m</button>
+    <button onclick="addElemFromPreset(9)" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #eee;border-radius:7px;background:#eff8ff;cursor:pointer;font-size:12px;font-weight:500;text-align:left"><span style="width:12px;height:12px;border-radius:2px;background:#87ceeb;border:1px solid #2471a3;flex-shrink:0"></span>Bench — 2.4×0.6m</button>
+    <div style="font-size:10px;font-weight:700;color:#bbb;text-transform:uppercase;letter-spacing:0.5px;margin:4px 0 2px">Other</div>
+    <button onclick="addElemFromPreset(10)" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #eee;border-radius:7px;background:#fff8f0;cursor:pointer;font-size:12px;font-weight:500;text-align:left"><span style="width:12px;height:12px;border-radius:2px;background:#f4a460;border:1px solid #c0622a;flex-shrink:0"></span>Pallet — 1.2×0.8m</button>
+    <button onclick="addElemFromPreset(11)" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #eee;border-radius:7px;background:#fff8f0;cursor:pointer;font-size:12px;font-weight:500;text-align:left"><span style="width:12px;height:12px;border-radius:2px;background:#f4a460;border:1px solid #c0622a;flex-shrink:0"></span>Crate — 0.6×0.6m</button>
+    <button onclick="addElemFromPreset(12)" style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1px solid #eee;border-radius:7px;background:#fff8f0;cursor:pointer;font-size:12px;font-weight:500;text-align:left"><span style="width:12px;height:12px;border-radius:2px;background:#f4a460;border:1px solid #c0622a;flex-shrink:0"></span>Machine — 1.5×1.0m</button>
+    <div style="font-size:10px;font-weight:700;color:#bbb;text-transform:uppercase;letter-spacing:0.5px;margin:4px 0 2px">Custom</div>
+    <div style="padding:8px;background:#f8f9fc;border-radius:8px;border:1px solid #eee">
+      <input id="custom-name-inp" placeholder="Name" style="width:100%;padding:6px 8px;border:1px solid #e0e0e0;border-radius:5px;font-size:12px;margin-bottom:5px;outline:none">
+      <div style="display:flex;gap:5px;margin-bottom:5px">
+        <input id="custom-w-inp" type="number" placeholder="W (m)" value="1.0" step="0.1" min="0.2" style="flex:1;padding:5px 8px;border:1px solid #e0e0e0;border-radius:5px;font-size:12px;outline:none">
+        <input id="custom-h-inp" type="number" placeholder="D (m)" value="0.5" step="0.1" min="0.2" style="flex:1;padding:5px 8px;border:1px solid #e0e0e0;border-radius:5px;font-size:12px;outline:none">
+      </div>
+      <button onclick="addElemFromPreset(13)" style="width:100%;padding:7px;background:#0f1f3d;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600">+ Add custom</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
